@@ -25,6 +25,7 @@ import (
 	"github.com/pingcap/pd/server/schedule/operator"
 	"github.com/pingcap/pd/server/schedule/opt"
 	"github.com/pingcap/pd/server/statistics"
+	"github.com/pingcap/kvproto/pkg/metapb"
 	"go.uber.org/zap"
 )
 
@@ -107,12 +108,21 @@ func (s *shuffleHotRegionScheduler) Schedule(cluster opt.Cluster) []*operator.Op
 }
 
 func (s *shuffleHotRegionScheduler) dispatch(typ BalanceType, cluster opt.Cluster) []*operator.Operator {
+	// HotRegionsScheduler doesn't consider storage stores.
+	stores := cluster.GetStores()
+	storageStoresIDs := make(map[uint64]struct{})
+	for _, store := range stores {
+		if store.GetMeta().GetStoreType() == metapb.StoreType_Storage {
+			storageStoresIDs[store.GetID()] = struct{}{}
+		}
+	}
+
 	switch typ {
 	case hotReadRegionBalance:
-		s.stats.readStatAsLeader = calcScore(cluster.RegionReadStats(), cluster, core.LeaderKind)
+		s.stats.readStatAsLeader = calcScore(cluster.RegionReadStats(), cluster, core.LeaderKind, storageStoresIDs)
 		return s.randomSchedule(cluster, s.stats.readStatAsLeader)
 	case hotWriteRegionBalance:
-		s.stats.writeStatAsLeader = calcScore(cluster.RegionWriteStats(), cluster, core.LeaderKind)
+		s.stats.writeStatAsLeader = calcScore(cluster.RegionWriteStats(), cluster, core.LeaderKind, storageStoresIDs)
 		return s.randomSchedule(cluster, s.stats.writeStatAsLeader)
 	}
 	return nil

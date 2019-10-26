@@ -221,6 +221,11 @@ func (h *Handler) AddBalanceRegionScheduler() error {
 	return h.AddScheduler("balance-region")
 }
 
+// AddSeparateColdHotScheduler adds a separate-cold-hot-scheduler.
+func (h *Handler) AddSeparateColdHotScheduler() error {
+	return h.AddScheduler("separate-cold-hot")
+}
+
 // AddBalanceHotRegionScheduler adds a balance-hot-region-scheduler.
 func (h *Handler) AddBalanceHotRegionScheduler() error {
 	return h.AddScheduler("hot-region")

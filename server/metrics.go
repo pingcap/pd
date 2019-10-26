@@ -48,6 +48,14 @@ var (
 			Help:      "Counter of region hearbeat.",
 		}, []string{"address", "store", "type", "status"})
 
+	coldWarmEventCounter = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "pd",
+			Subsystem: "scheduler",
+			Name:      "cold_warm_event",
+			Help:      "Counter of cold and warm data.",
+		}, []string{"type"})
+
 	regionEventCounter = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "pd",
@@ -113,6 +121,7 @@ func init() {
 	prometheus.MustRegister(schedulerStatusGauge)
 	prometheus.MustRegister(regionHeartbeatCounter)
 	prometheus.MustRegister(regionEventCounter)
+	prometheus.MustRegister(coldWarmEventCounter)
 	prometheus.MustRegister(regionHeartbeatLatency)
 	prometheus.MustRegister(hotSpotStatusGauge)
 	prometheus.MustRegister(metadataGauge)

@@ -121,10 +121,41 @@ func (s *balanceRegionScheduler) IsScheduleAllowed(cluster opt.Cluster) bool {
 func (s *balanceRegionScheduler) Schedule(cluster opt.Cluster) []*operator.Operator {
 	schedulerCounter.WithLabelValues(s.GetName(), "schedule").Inc()
 	stores := cluster.GetStores()
+	storageStores := make([]*core.StoreInfo, 0, len(stores))
+	performanceStores := make([]*core.StoreInfo, 0, len(stores))
+	for _, store := range stores {
+		storeType := store.GetMeta().GetStoreType()
+		if storeType == metapb.StoreType_Storage {
+			storageStores = append(storageStores, store)
+		} else if storeType == metapb.StoreType_Performance {
+			performanceStores = append(performanceStores, store)
+		} else {
+			performanceStores = append(performanceStores, store)
+		}
+	}
+
+	// First: balance regions in performance TiKVs
+	if len(performanceStores) > 0 {
+		if ops := s.scheduleImpl(cluster, performanceStores, storageStores); ops != nil {
+			return ops
+		}
+	}
+
+	// Second: balance regions in storage TiKVs
+	// Todo: lazy balance in storage TiKVs
+	if len(storageStores) > 0 {
+		return s.scheduleImpl(cluster, storageStores, performanceStores)
+	}
+
+	return nil
+}
+
+func (s *balanceRegionScheduler) scheduleImpl(cluster opt.Cluster, includeStores, excludedStores []*core.StoreInfo) []*operator.Operator {
+	schedulerCounter.WithLabelValues(s.GetName(), "schedule").Inc()
 
 	// source is the store with highest region score in the list that can be selected as balance source.
 	f := s.hitsCounter.buildSourceFilter(s.GetName(), cluster)
-	source := s.selector.SelectSource(cluster, stores, f)
+	source := s.selector.SelectSource(cluster, includeStores, f)
 	if source == nil {
 		schedulerCounter.WithLabelValues(s.GetName(), "no-source-store").Inc()
 		// Unlike the balanceLeaderScheduler, we don't need to clear the taintCache
@@ -175,7 +206,7 @@ func (s *balanceRegionScheduler) Schedule(cluster opt.Cluster) []*operator.Opera
 		}
 
 		oldPeer := region.GetStorePeer(sourceID)
-		if op := s.transferPeer(cluster, region, oldPeer); op != nil {
+		if op := s.transferPeer(cluster, region, oldPeer, excludedStores); op != nil {
 			schedulerCounter.WithLabelValues(s.GetName(), "new-operator").Inc()
 			return []*operator.Operator{op}
 		}
@@ -184,7 +215,7 @@ func (s *balanceRegionScheduler) Schedule(cluster opt.Cluster) []*operator.Opera
 }
 
 // transferPeer selects the best store to create a new peer to replace the old peer.
-func (s *balanceRegionScheduler) transferPeer(cluster opt.Cluster, region *core.RegionInfo, oldPeer *metapb.Peer) *operator.Operator {
+func (s *balanceRegionScheduler) transferPeer(cluster opt.Cluster, region *core.RegionInfo, oldPeer *metapb.Peer, excludedStores []*core.StoreInfo) *operator.Operator {
 	// scoreGuard guarantees that the distinct score will not decrease.
 	stores := cluster.GetRegionStores(region)
 	sourceStoreID := oldPeer.GetStoreId()
@@ -194,8 +225,13 @@ func (s *balanceRegionScheduler) transferPeer(cluster opt.Cluster, region *core.
 	}
 	scoreGuard := filter.NewDistinctScoreFilter(s.GetName(), cluster.GetLocationLabels(), stores, source)
 	hitsFilter := s.hitsCounter.buildTargetFilter(s.GetName(), cluster, source)
+	excludeStoreIDs := make(map[uint64]struct{})
+	for _, store := range excludedStores {
+		excludeStoreIDs[store.GetID()] = struct{}{}
+	}
+	coldHotFilter := filter.NewExcludedFilter(s.GetName(), excludeStoreIDs, excludeStoreIDs)
 	checker := checker.NewReplicaChecker(cluster, nil, s.GetName())
-	storeID, _ := checker.SelectBestReplacementStore(region, oldPeer, scoreGuard, hitsFilter)
+	storeID, _ := checker.SelectBestReplacementStore(region, oldPeer, scoreGuard, hitsFilter, coldHotFilter)
 	if storeID == 0 {
 		schedulerCounter.WithLabelValues(s.GetName(), "no-replacement").Inc()
 		s.hitsCounter.put(source, nil)

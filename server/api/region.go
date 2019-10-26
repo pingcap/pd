@@ -17,6 +17,7 @@ import (
 	"container/heap"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/pingcap/kvproto/pkg/metapb"
@@ -28,11 +29,12 @@ import (
 
 // RegionInfo records detail region info for api usage.
 type RegionInfo struct {
-	ID          uint64              `json:"id"`
-	StartKey    string              `json:"start_key"`
-	EndKey      string              `json:"end_key"`
-	RegionEpoch *metapb.RegionEpoch `json:"epoch,omitempty"`
-	Peers       []*metapb.Peer      `json:"peers,omitempty"`
+	ID             uint64              `json:"id"`
+	StartKey       string              `json:"start_key"`
+	EndKey         string              `json:"end_key"`
+	LastAccessTime string              `json:"last_access_time"`
+	RegionEpoch    *metapb.RegionEpoch `json:"epoch,omitempty"`
+	Peers          []*metapb.Peer      `json:"peers,omitempty"`
 
 	Leader          *metapb.Peer      `json:"leader,omitempty"`
 	DownPeers       []*pdpb.PeerStats `json:"down_peers,omitempty"`
@@ -50,10 +52,12 @@ func NewRegionInfo(r *core.RegionInfo) *RegionInfo {
 	if r == nil {
 		return nil
 	}
+	tm := time.Unix(int64(r.GetMeta().LastAccessTime), 0)
 	return &RegionInfo{
 		ID:              r.GetID(),
 		StartKey:        string(core.HexRegionKey(r.GetStartKey())),
 		EndKey:          string(core.HexRegionKey(r.GetEndKey())),
+		LastAccessTime:  tm.Format("2006-01-02 03:04:05 PM"),
 		RegionEpoch:     r.GetRegionEpoch(),
 		Peers:           r.GetPeers(),
 		Leader:          r.GetLeader(),

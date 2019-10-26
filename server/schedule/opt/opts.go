@@ -36,6 +36,7 @@ type Options interface {
 	GetMaxSnapshotCount() uint64
 	GetMaxPendingPeerCount() uint64
 	GetMaxStoreDownTime() time.Duration
+	GetMaxColdDataTime() time.Duration
 	GetMaxMergeRegionSize() uint64
 	GetMaxMergeRegionKeys() uint64
 	GetSplitMergeInterval() time.Duration

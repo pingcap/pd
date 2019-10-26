@@ -182,6 +182,11 @@ func (o *ScheduleOption) GetMaxStoreDownTime() time.Duration {
 	return o.Load().MaxStoreDownTime.Duration
 }
 
+// GetMaxColdDataTime returns
+func (o *ScheduleOption) GetMaxColdDataTime() time.Duration {
+	return o.Load().MaxColdDataTime.Duration
+}
+
 // GetLeaderScheduleLimit returns the limit for leader schedule.
 func (o *ScheduleOption) GetLeaderScheduleLimit(name string) uint64 {
 	if n, ok := o.GetNS(name); ok {

@@ -49,4 +49,5 @@ type ScheduleOptions interface {
 	IsReplaceOfflineReplicaEnabled() bool
 
 	GetMaxStoreDownTime() time.Duration
+	GetMaxColdDataTime() time.Duration
 }

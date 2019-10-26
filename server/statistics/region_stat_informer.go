@@ -21,4 +21,6 @@ type RegionStatInformer interface {
 	RegionWriteStats() map[uint64][]*HotPeerStat
 	RegionReadStats() map[uint64][]*HotPeerStat
 	RandHotRegionFromStore(store uint64, kind FlowKind) *core.RegionInfo
+	ColdToWarmStats(limit uint64) []*core.RegionInfo
+	WarmToColdStats(limit uint64) []*core.RegionInfo
 }

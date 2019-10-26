@@ -494,6 +494,8 @@ type ScheduleConfig struct {
 	// MaxStoreDownTime is the max duration after which
 	// a store will be considered to be down if it hasn't reported heartbeats.
 	MaxStoreDownTime typeutil.Duration `toml:"max-store-down-time,omitempty" json:"max-store-down-time"`
+	// MaxColdDataTime is
+	MaxColdDataTime typeutil.Duration `toml:"max-cold-data-time,omitempty" json:"max-cold-data-time"`
 	// LeaderScheduleLimit is the max coexist leader schedules.
 	LeaderScheduleLimit uint64 `toml:"leader-schedule-limit,omitempty" json:"leader-schedule-limit"`
 	// LeaderScheduleStrategy is the option to balance leader, there are some strategics supported: ["count", "size"], default: "count"
@@ -569,6 +571,7 @@ func (c *ScheduleConfig) Clone() *ScheduleConfig {
 		SplitMergeInterval:           c.SplitMergeInterval,
 		PatrolRegionInterval:         c.PatrolRegionInterval,
 		MaxStoreDownTime:             c.MaxStoreDownTime,
+		MaxColdDataTime:              c.MaxColdDataTime,
 		LeaderScheduleLimit:          c.LeaderScheduleLimit,
 		LeaderScheduleStrategy:       c.LeaderScheduleStrategy,
 		RegionScheduleLimit:          c.RegionScheduleLimit,
@@ -602,6 +605,7 @@ const (
 	defaultSplitMergeInterval     = 1 * time.Hour
 	defaultPatrolRegionInterval   = 100 * time.Millisecond
 	defaultMaxStoreDownTime       = 30 * time.Minute
+	defaultMaxColdDataTime        = 30 * 24 * time.Hour
 	defaultLeaderScheduleLimit    = 4
 	defaultRegionScheduleLimit    = 2048
 	defaultReplicaScheduleLimit   = 64
@@ -634,6 +638,7 @@ func (c *ScheduleConfig) adjust(meta *configMetaData) error {
 	adjustDuration(&c.SplitMergeInterval, defaultSplitMergeInterval)
 	adjustDuration(&c.PatrolRegionInterval, defaultPatrolRegionInterval)
 	adjustDuration(&c.MaxStoreDownTime, defaultMaxStoreDownTime)
+	adjustDuration(&c.MaxColdDataTime, defaultMaxColdDataTime)
 	if !meta.IsDefined("leader-schedule-limit") {
 		adjustUint64(&c.LeaderScheduleLimit, defaultLeaderScheduleLimit)
 	}
@@ -715,6 +720,7 @@ var defaultSchedulers = SchedulerConfigs{
 	{Type: "balance-leader"},
 	{Type: "hot-region"},
 	{Type: "label"},
+	{Type: "separate-cold-hot"},
 }
 
 // IsDefaultScheduler checks whether the scheduler is enable by default.

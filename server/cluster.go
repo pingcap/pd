@@ -45,6 +45,15 @@ var (
 	defaultChangedRegionsLimit = 10000
 )
 
+// ColdWarmDirection represents the transfer direction of cold and warm.
+type ColdWarmDirection uint32
+
+// ColdWarmDirection
+const (
+	ColdToWarm ColdWarmDirection = 0
+	WarmToCold
+)
+
 // RaftCluster is used for cluster config management.
 // Raft cluster key format:
 // cluster 1 -> /1/raft, value is metapb.Cluster
@@ -76,6 +85,7 @@ type RaftCluster struct {
 	regionStats     *statistics.RegionStatistics
 	storesStats     *statistics.StoresStats
 	hotSpotCache    *statistics.HotCache
+	coldWarmStats   map[ColdWarmDirection]map[uint64]*core.RegionInfo
 
 	coordinator *coordinator
 
@@ -91,12 +101,16 @@ type ClusterStatus struct {
 }
 
 func newRaftCluster(s *Server, clusterID uint64) *RaftCluster {
+	coldWarmStats := make(map[ColdWarmDirection]map[uint64]*core.RegionInfo)
+	coldWarmStats[ColdToWarm] = make(map[uint64]*core.RegionInfo)
+	coldWarmStats[WarmToCold] = make(map[uint64]*core.RegionInfo)
 	return &RaftCluster{
-		s:            s,
-		running:      false,
-		clusterID:    clusterID,
-		clusterRoot:  s.getClusterRootPath(),
-		regionSyncer: syncer.NewRegionSyncer(s),
+		s:             s,
+		running:       false,
+		clusterID:     clusterID,
+		clusterRoot:   s.getClusterRootPath(),
+		regionSyncer:  syncer.NewRegionSyncer(s),
+		coldWarmStats: coldWarmStats,
 	}
 }
 
@@ -351,6 +365,8 @@ func (c *RaftCluster) processRegionHeartbeat(region *core.RegionInfo) error {
 			zap.Uint64("region-id", region.GetID()),
 			zap.Stringer("meta-region", core.RegionToHexMeta(region.GetMeta())),
 		)
+		now := time.Now()
+		region.GetMeta().LastAccessTime = uint64(now.Unix())
 		saveKV, saveCache, isNew = true, true, true
 	} else {
 		r := region.GetRegionEpoch()
@@ -409,6 +425,37 @@ func (c *RaftCluster) processRegionHeartbeat(region *core.RegionInfo) error {
 			region.GetKeysWritten() != origin.GetKeysWritten() ||
 			region.GetKeysRead() != origin.GetKeysRead() {
 			saveCache = true
+		}
+
+		regionStores := c.takeRegionStoresLocked(region)
+		now := time.Now()
+		originLastAccessTime := origin.GetMeta().GetLastAccessTime()
+		if originLastAccessTime == 0 {
+			region.GetMeta().LastAccessTime = uint64(now.Unix())
+			saveKV, saveCache = true, true
+		}
+		if region.GetBytesRead() > 0 {
+			region.GetMeta().LastAccessTime = uint64(now.Unix())
+			saveKV, saveCache = true, true
+			for _, store := range regionStores {
+				// some replica in storage stores, should transfer to performance stores
+				if store.GetMeta().StoreType == metapb.StoreType_Storage {
+					c.coldWarmStats[ColdToWarm][region.GetID()] = region
+					coldWarmEventCounter.WithLabelValues("cold-to-warm").Inc()
+					break
+				}
+			}
+		} else {
+			if uint64(now.Unix())-region.GetMeta().LastAccessTime > uint64(c.opt.GetMaxColdDataTime().Seconds()) {
+				for _, store := range regionStores {
+					// some replica in performance stores, should transfer to storage stores
+					if store.GetMeta().StoreType == metapb.StoreType_Performance {
+						c.coldWarmStats[WarmToCold][region.GetID()] = region
+						coldWarmEventCounter.WithLabelValues("warm-to-cold").Inc()
+						break
+					}
+				}
+			}
 		}
 	}
 
@@ -479,6 +526,37 @@ func (c *RaftCluster) processRegionHeartbeat(region *core.RegionInfo) error {
 		c.hotSpotCache.Update(readItem)
 	}
 	return nil
+}
+
+// drainColdWarmStats drains cold and warm statistics
+func (c *RaftCluster) drainColdWarmStats(direction ColdWarmDirection, limit uint64) []*core.RegionInfo {
+	c.Lock()
+	defer c.Unlock()
+
+	var cap uint64 = 32
+	if limit > 0 {
+		cap = limit
+	}
+	regions := make([]*core.RegionInfo, 0, cap)
+	toBeDeleted := make([]uint64, 0, cap)
+	var count uint64 = 0
+	for regionID, region := range c.coldWarmStats[direction] {
+		if limit > 0 && count >= limit {
+			break
+		}
+		count += 1
+		toBeDeleted = append(toBeDeleted, regionID)
+		regions = append(regions, region)
+	}
+	for _, regionID := range toBeDeleted {
+		delete(c.coldWarmStats[direction], regionID)
+	}
+
+	if len(regions) > 0 {
+		return regions
+	} else {
+		return nil
+	}
 }
 
 func (c *RaftCluster) updateStoreStatusLocked(id uint64) {
@@ -1291,6 +1369,11 @@ func (c *RaftCluster) GetMaxStoreDownTime() time.Duration {
 	return c.opt.GetMaxStoreDownTime()
 }
 
+// GetMaxColdDataTime returns
+func (c *RaftCluster) GetMaxColdDataTime() time.Duration {
+	return c.opt.GetMaxColdDataTime()
+}
+
 // GetMaxReplicas returns the number of replicas.
 func (c *RaftCluster) GetMaxReplicas() int {
 	return c.opt.GetMaxReplicas(namespace.DefaultNamespace)
@@ -1407,6 +1490,16 @@ func (c *RaftCluster) CheckWriteStatus(region *core.RegionInfo) []*statistics.Ho
 // CheckReadStatus checks the read status, returns whether need update statistics and item.
 func (c *RaftCluster) CheckReadStatus(region *core.RegionInfo) []*statistics.HotPeerStat {
 	return c.hotSpotCache.CheckRead(region, c.storesStats)
+}
+
+// ColdToWarmStats return regions recognized as warm regions(was cold)
+func (c *RaftCluster) ColdToWarmStats(limit uint64) []*core.RegionInfo {
+	return c.drainColdWarmStats(ColdToWarm, limit)
+}
+
+// WarmToColdStats return regions recognized as cold regions
+func (c *RaftCluster) WarmToColdStats(limit uint64) []*core.RegionInfo {
+	return c.drainColdWarmStats(WarmToCold, limit)
 }
 
 func (c *RaftCluster) putRegion(region *core.RegionInfo) error {

@@ -24,7 +24,7 @@ import (
 	"time"
 )
 
-var supportOperators = []string{"balance-region", "balance-leader", "transfer-hot-read-leader", "move-hot-read-region", "transfer-hot-write-leader", "move-hot-write-region"}
+var supportOperators = []string{"balance-region", "balance-leader", "transfer-hot-read-leader", "move-hot-read-region", "transfer-hot-write-leader", "move-hot-write-region", "separate-cold-hot"}
 
 // DefaultLayout is the default layout to parse log.
 const DefaultLayout = "2006/01/02 15:04:05"

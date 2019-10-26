@@ -75,6 +75,7 @@ func NewAddSchedulerCommand() *cobra.Command {
 	c.AddCommand(NewScatterRangeSchedulerCommand())
 	c.AddCommand(NewBalanceLeaderSchedulerCommand())
 	c.AddCommand(NewBalanceRegionSchedulerCommand())
+	c.AddCommand(NewSeparateColdHotSchedulerCommand())
 	c.AddCommand(NewBalanceHotRegionSchedulerCommand())
 	c.AddCommand(NewRandomMergeSchedulerCommand())
 	c.AddCommand(NewBalanceAdjacentRegionSchedulerCommand())
@@ -185,6 +186,16 @@ func NewBalanceRegionSchedulerCommand() *cobra.Command {
 	c := &cobra.Command{
 		Use:   "balance-region-scheduler",
 		Short: "add a scheduler to balance regions between stores",
+		Run:   addSchedulerCommandFunc,
+	}
+	return c
+}
+
+// NewSeparateColdHotSchedulerCommand returns a command to add a separate-cold-hot-scheduler.
+func NewSeparateColdHotSchedulerCommand() *cobra.Command {
+	c := &cobra.Command{
+		Use:   "separate-cold-hot-scheduler",
+		Short: "add a scheduler to separate cold and hot data",
 		Run:   addSchedulerCommandFunc,
 	}
 	return c

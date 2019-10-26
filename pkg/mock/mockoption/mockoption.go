@@ -28,6 +28,7 @@ const (
 	defaultMaxMergeRegionKeys          = 0
 	defaultSplitMergeInterval          = 0
 	defaultMaxStoreDownTime            = 30 * time.Minute
+	defaultMaxColdDataTime             = 30 * 24 * time.Hour
 	defaultLeaderScheduleLimit         = 4
 	defaultRegionScheduleLimit         = 64
 	defaultReplicaScheduleLimit        = 64
@@ -61,6 +62,7 @@ type ScheduleOptions struct {
 	SplitMergeInterval           time.Duration
 	EnableOneWayMerge            bool
 	MaxStoreDownTime             time.Duration
+	MaxColdDataTime              time.Duration
 	MaxReplicas                  int
 	LocationLabels               []string
 	StrictlyMatchLabel           bool
@@ -94,6 +96,7 @@ func NewScheduleOptions() *ScheduleOptions {
 	mso.SchedulerMaxWaitingOperator = defaultSchedulerMaxWaitingOperator
 	mso.SplitMergeInterval = defaultSplitMergeInterval
 	mso.MaxStoreDownTime = defaultMaxStoreDownTime
+	mso.MaxColdDataTime = defaultMaxColdDataTime
 	mso.MaxReplicas = defaultMaxReplicas
 	mso.StrictlyMatchLabel = defaultStrictlyMatchLabel
 	mso.EnablePlacementRules = defaultEnablePlacementRules
@@ -169,6 +172,11 @@ func (mso *ScheduleOptions) IsOneWayMergeEnabled() bool {
 // GetMaxStoreDownTime mocks method
 func (mso *ScheduleOptions) GetMaxStoreDownTime() time.Duration {
 	return mso.MaxStoreDownTime
+}
+
+// GetMaxStoreDownTime mocks method
+func (mso *ScheduleOptions) GetMaxColdDataTime() time.Duration {
+	return mso.MaxColdDataTime
 }
 
 // GetMaxReplicas mocks method
