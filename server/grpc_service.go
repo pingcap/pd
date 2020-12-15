@@ -14,6 +14,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -444,6 +445,16 @@ func (s *Server) RegionHeartbeat(stream pdpb.PD_RegionHeartbeatServer) error {
 			msg := err.Error()
 			s.hbStreams.SendErr(pdpb.ErrorType_UNKNOWN, msg, request.GetLeader())
 			continue
+		}
+
+		if !region.GetCountInAntiScore() {
+			for _, rule := range rc.GetAntiRuleManager().GetAntiRules() {
+				if bytes.Compare(rule.StartKey, region.GetStartKey()) <= 0 && bytes.Compare(rule.EndKey, region.GetEndKey()) >= 0 {
+					//todo error handling
+					rc.GetAntiRuleManager().IncrAntiScore(rule.ID, region.GetLeader().StoreId)
+				}
+			}
+			region.SetCountInAntiScoreTrue()
 		}
 
 		regionHeartbeatHandleDuration.WithLabelValues(storeAddress, storeLabel).Observe(time.Since(start).Seconds())

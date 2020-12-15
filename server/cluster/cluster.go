@@ -16,6 +16,7 @@ package cluster
 import (
 	"context"
 	"fmt"
+	"github.com/tikv/pd/server/schedule/anti"
 	"net/http"
 	"sync"
 	"time"
@@ -110,9 +111,11 @@ type RaftCluster struct {
 	quit         chan struct{}
 	regionSyncer *syncer.RegionSyncer
 
-	ruleManager *placement.RuleManager
-	etcdClient  *clientv3.Client
-	httpClient  *http.Client
+	ruleManager     *placement.RuleManager
+	antiRuleManager *anti.AntiRuleManager
+
+	etcdClient *clientv3.Client
+	httpClient *http.Client
 
 	replicationMode *replication.ModeManager
 	traceRegionFlow bool
@@ -236,6 +239,8 @@ func (c *RaftCluster) Start(s Server) error {
 			return err
 		}
 	}
+
+	c.antiRuleManager = anti.NewAntiRuleManager()
 
 	c.componentManager = component.NewManager(c.storage)
 	_, err = c.storage.LoadComponent(&c.componentManager)
@@ -1502,6 +1507,13 @@ func (c *RaftCluster) GetRuleManager() *placement.RuleManager {
 // FitRegion tries to fit the region with placement rules.
 func (c *RaftCluster) FitRegion(region *core.RegionInfo) *placement.RegionFit {
 	return c.GetRuleManager().FitRegion(c, region)
+}
+
+// GetAntiRuleManager returns the anti rule manager reference.
+func (c *RaftCluster) GetAntiRuleManager() *anti.AntiRuleManager {
+	c.RLock()
+	defer c.RUnlock()
+	return c.antiRuleManager
 }
 
 type prepareChecker struct {

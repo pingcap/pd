@@ -115,6 +115,9 @@ func createRouter(ctx context.Context, prefix string, svr *server.Server) *mux.R
 	clusterRouter.HandleFunc("/config/placement-rule/{group}", rulesHandler.SetGroupBundle).Methods("POST")
 	escapeRouter.HandleFunc("/config/placement-rule/{group}", rulesHandler.DeleteGroupBundle).Methods("DELETE")
 
+	antiRulesHandler := newAntiRulesHandler(svr, rd)
+	clusterRouter.HandleFunc("/config/anti-rule", antiRulesHandler.Set).Methods("POST")
+
 	storeHandler := newStoreHandler(handler, rd)
 	clusterRouter.HandleFunc("/store/{id}", storeHandler.Get).Methods("GET")
 	clusterRouter.HandleFunc("/store/{id}", storeHandler.Delete).Methods("DELETE")
