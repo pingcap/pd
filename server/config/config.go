@@ -681,6 +681,8 @@ type ScheduleConfig struct {
 	HighSpaceRatio float64 `toml:"high-space-ratio" json:"high-space-ratio"`
 	// RegionScoreFormulaVersion is used to control the formula used to calculate region score.
 	RegionScoreFormulaVersion string `toml:"region-score-formula-version" json:"region-score-formula-version"`
+	// HotScheduleVersion is used to control the hot region scheduler policy
+	HotSchedulerVersion string `toml:"hot-scheduler-version" json:"hot-scheduler-version"`
 	// SchedulerMaxWaitingOperator is the max coexist operators for each scheduler.
 	SchedulerMaxWaitingOperator uint64 `toml:"scheduler-max-waiting-operator" json:"scheduler-max-waiting-operator"`
 	// WARN: DisableLearner is deprecated.
@@ -772,6 +774,7 @@ const (
 	defaultLowSpaceRatio             = 0.8
 	defaultHighSpaceRatio            = 0.7
 	defaultRegionScoreFormulaVersion = "v2"
+	defaultHotSchedulerVersion       = "v1"
 	// defaultHotRegionCacheHitsThreshold is the low hit number threshold of the
 	// hot region.
 	defaultHotRegionCacheHitsThreshold = 3
@@ -840,6 +843,10 @@ func (c *ScheduleConfig) adjust(meta *configMetaData, reloading bool) error {
 	// new cluster:v2, old cluster:v1
 	if !meta.IsDefined("region-score-formula-version") && !reloading {
 		adjustString(&c.RegionScoreFormulaVersion, defaultRegionScoreFormulaVersion)
+	}
+
+	if !meta.IsDefined("hot-scheduler-version") && !reloading {
+		adjustString(&c.HotSchedulerVersion, defaultHotSchedulerVersion)
 	}
 
 	adjustSchedulers(&c.Schedulers, DefaultSchedulers)

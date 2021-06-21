@@ -133,6 +133,8 @@ func (s *testConfigSuite) TestReloadUpgrade2(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(newOpt.Reload(storage), IsNil)
 	c.Assert(newOpt.GetScheduleConfig().RegionScoreFormulaVersion, Equals, "") // formulaVersion keep old value when reloading.
+	c.Assert(newOpt.GetScheduleConfig().HotSchedulerVersion, Equals, "")       // formulaVersion keep old value when reloading.
+
 }
 
 func (s *testConfigSuite) TestValidation(c *C) {

@@ -418,6 +418,11 @@ func (o *PersistOptions) GetRegionScoreFormulaVersion() string {
 	return o.GetScheduleConfig().RegionScoreFormulaVersion
 }
 
+// GetHotSchedulerVersion returns the formula version config.
+func (o *PersistOptions) GetHotSchedulerVersion() string {
+	return o.GetScheduleConfig().HotSchedulerVersion
+}
+
 // GetSchedulerMaxWaitingOperator returns the number of the max waiting operators.
 func (o *PersistOptions) GetSchedulerMaxWaitingOperator() uint64 {
 	return o.getTTLUintOr(schedulerMaxWaitingOperatorKey, o.GetScheduleConfig().SchedulerMaxWaitingOperator)
