@@ -511,13 +511,23 @@ func (bs *balanceSolver) init() {
 	}
 
 	if bs.cluster.GetOpts().GetHotSchedulerVersion() == "v2" {
-		bs.firstPriority = statistics.QueryDim
-		bs.secondPriority = statistics.ByteDim
+		if bs.rwTy == read {
+			bs.firstPriority = statistics.QueryDim
+			bs.secondPriority = statistics.ByteDim
+			bs.isSelectedDim = func(dim int) bool {
+				return dim == statistics.QueryDim || dim == statistics.ByteDim
+			}
+		} else { // write follower
+			bs.firstPriority = statistics.ByteDim
+			bs.secondPriority = statistics.KeyDim
+			bs.isSelectedDim = func(dim int) bool {
+				return dim == statistics.KeyDim || dim == statistics.ByteDim
+			}
+		}
+		// write leader
 		bs.cpuPriority = statistics.QueryDim
 		bs.anotherPriority = statistics.ByteDim
-		bs.isSelectedDim = func(dim int) bool {
-			return dim == statistics.QueryDim || dim == statistics.ByteDim
-		}
+
 	} else {
 		bs.firstPriority = statistics.ByteDim
 		bs.secondPriority = statistics.KeyDim
