@@ -108,35 +108,39 @@ func UpdateStoreHeartbeatMetrics(store *core.StoreInfo) {
 // RollingStoreStats are multiple sets of recent historical records with specified windows size.
 type RollingStoreStats struct {
 	sync.RWMutex
-	timeMedians map[StoreStatKind]*movingaverage.TimeMedian
-	movingAvgs  map[StoreStatKind]movingaverage.MovingAvg
+	timeMedians []*movingaverage.TimeMedian
+	movingAvgs  []movingaverage.MovingAvg
 }
 
 const (
-	storeStatsRollingWindows = 3
-	// DefaultAotSize is default size of average over time.
-	DefaultAotSize = 2
-	// DefaultWriteMfSize is default size of write median filter
-	DefaultWriteMfSize = 5
-	// defaultReadMfSize is default size of read median filter
-	defaultReadMfSize = 3
+	storeStatsRollingWindowsSize = 3
+
+	// The data from regionStats is used in TiFlash, so higher tolerance is required
+	regionStatsAotSize            = 4
+	regionStatsRollingWindowsSize = 10
 )
 
 // NewRollingStoreStats creates a RollingStoreStats.
 func newRollingStoreStats() *RollingStoreStats {
-	timeMedians := make(map[StoreStatKind]*movingaverage.TimeMedian)
+	timeMedians := make([]*movingaverage.TimeMedian, StoreStatCount)
+	movingAvgs := make([]movingaverage.MovingAvg, StoreStatCount)
+
+	// from StoreHeartbeat
 	interval := StoreHeartBeatReportInterval * time.Second
-	timeMedians[StoreReadBytes] = movingaverage.NewTimeMedian(DefaultAotSize, defaultReadMfSize, interval)
-	timeMedians[StoreReadKeys] = movingaverage.NewTimeMedian(DefaultAotSize, defaultReadMfSize, interval)
-	timeMedians[StoreReadQuery] = movingaverage.NewTimeMedian(DefaultAotSize, defaultReadMfSize, interval)
+	timeMedians[StoreReadBytes] = movingaverage.NewTimeMedian(DefaultAotSize, DefaultReadMfSize, interval)
+	timeMedians[StoreReadKeys] = movingaverage.NewTimeMedian(DefaultAotSize, DefaultReadMfSize, interval)
+	timeMedians[StoreReadQuery] = movingaverage.NewTimeMedian(DefaultAotSize, DefaultReadMfSize, interval)
 	timeMedians[StoreWriteBytes] = movingaverage.NewTimeMedian(DefaultAotSize, DefaultWriteMfSize, interval)
 	timeMedians[StoreWriteKeys] = movingaverage.NewTimeMedian(DefaultAotSize, DefaultWriteMfSize, interval)
 	timeMedians[StoreWriteQuery] = movingaverage.NewTimeMedian(DefaultAotSize, DefaultWriteMfSize, interval)
+	movingAvgs[StoreCPUUsage] = movingaverage.NewMedianFilter(storeStatsRollingWindowsSize)
+	movingAvgs[StoreDiskReadRate] = movingaverage.NewMedianFilter(storeStatsRollingWindowsSize)
+	movingAvgs[StoreDiskWriteRate] = movingaverage.NewMedianFilter(storeStatsRollingWindowsSize)
 
-	movingAvgs := make(map[StoreStatKind]movingaverage.MovingAvg)
-	movingAvgs[StoreCPUUsage] = movingaverage.NewMedianFilter(storeStatsRollingWindows)
-	movingAvgs[StoreDiskReadRate] = movingaverage.NewMedianFilter(storeStatsRollingWindows)
-	movingAvgs[StoreDiskWriteRate] = movingaverage.NewMedianFilter(storeStatsRollingWindows)
+	// from RegionHeartbeat
+	interval = RegionHeartBeatReportInterval * time.Second
+	timeMedians[StoreRegionWriteBytes] = movingaverage.NewTimeMedian(regionStatsAotSize, regionStatsRollingWindowsSize, interval)
+	timeMedians[StoreRegionWriteKeys] = movingaverage.NewTimeMedian(regionStatsAotSize, regionStatsRollingWindowsSize, interval)
 
 	return &RollingStoreStats{
 		timeMedians: timeMedians,
@@ -199,7 +203,7 @@ func (r *RollingStoreStats) GetLoad(k StoreStatKind) float64 {
 	r.RLock()
 	defer r.RUnlock()
 	switch k {
-	case StoreReadBytes, StoreReadKeys, StoreReadQuery, StoreWriteBytes, StoreWriteKeys, StoreWriteQuery:
+	case StoreReadBytes, StoreReadKeys, StoreReadQuery, StoreWriteBytes, StoreWriteKeys, StoreWriteQuery, StoreRegionWriteBytes, StoreRegionWriteKeys:
 		return r.timeMedians[k].Get()
 	case StoreCPUUsage, StoreDiskReadRate, StoreDiskWriteRate:
 		return r.movingAvgs[k].Get()
@@ -213,7 +217,7 @@ func (r *RollingStoreStats) GetInstantLoad(k StoreStatKind) float64 {
 	r.RLock()
 	defer r.RUnlock()
 	switch k {
-	case StoreReadBytes, StoreReadKeys, StoreReadQuery, StoreWriteBytes, StoreWriteKeys, StoreWriteQuery:
+	case StoreReadBytes, StoreReadKeys, StoreReadQuery, StoreWriteBytes, StoreWriteKeys, StoreWriteQuery, StoreRegionWriteBytes, StoreRegionWriteKeys:
 		return r.timeMedians[k].GetInstantaneous()
 	case StoreCPUUsage, StoreDiskReadRate, StoreDiskWriteRate:
 		return r.movingAvgs[k].Get()
