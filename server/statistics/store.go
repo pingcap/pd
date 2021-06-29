@@ -24,6 +24,16 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	storeStatsRollingWindowsSize = 3
+
+	// RegionStatsObserveInterval is the interval for obtaining statistics from RegionTree
+	RegionStatsObserveInterval = RegionHeartBeatReportInterval * time.Second
+	// The data from regionStats is used in TiFlash, so higher tolerance is required
+	regionStatsAotSize            = 4
+	regionStatsRollingWindowsSize = 10
+)
+
 // StoresStats is a cache hold hot regions.
 type StoresStats struct {
 	sync.RWMutex
@@ -69,10 +79,26 @@ func (s *StoresStats) Observe(storeID uint64, stats *pdpb.StoreStats) {
 	rollingStoreStat.Observe(stats)
 }
 
+// ObserveRegionStats records the current stores status from region stats.
+func (s *StoresStats) ObserveRegionStats(storeIDs []uint64, writeBytesRates, writeKeysRates []float64) {
+	for i, storeID := range storeIDs {
+		rollingStoreStat := s.GetOrCreateRollingStoreStats(storeID)
+		rollingStoreStat.ObserveRegionStats(writeBytesRates[i], writeKeysRates[i])
+	}
+}
+
 // Set sets the store statistics (for test).
 func (s *StoresStats) Set(storeID uint64, stats *pdpb.StoreStats) {
 	rollingStoreStat := s.GetOrCreateRollingStoreStats(storeID)
 	rollingStoreStat.Set(stats)
+}
+
+// SetRegionStats sets the store statistics from region stats (for test).
+func (s *StoresStats) SetRegionStats(storeIDs []uint64, writeBytesRates, writeKeysRates []float64) {
+	for i, storeID := range storeIDs {
+		rollingStoreStat := s.GetOrCreateRollingStoreStats(storeID)
+		rollingStoreStat.SetRegionStats(writeBytesRates[i], writeKeysRates[i])
+	}
 }
 
 // GetStoresLoads returns all stores loads.
@@ -112,14 +138,6 @@ type RollingStoreStats struct {
 	movingAvgs  []movingaverage.MovingAvg
 }
 
-const (
-	storeStatsRollingWindowsSize = 3
-
-	// The data from regionStats is used in TiFlash, so higher tolerance is required
-	regionStatsAotSize            = 4
-	regionStatsRollingWindowsSize = 10
-)
-
 // NewRollingStoreStats creates a RollingStoreStats.
 func newRollingStoreStats() *RollingStoreStats {
 	timeMedians := make([]*movingaverage.TimeMedian, StoreStatCount)
@@ -138,9 +156,8 @@ func newRollingStoreStats() *RollingStoreStats {
 	movingAvgs[StoreDiskWriteRate] = movingaverage.NewMedianFilter(storeStatsRollingWindowsSize)
 
 	// from RegionHeartbeat
-	interval = RegionHeartBeatReportInterval * time.Second
-	timeMedians[StoreRegionWriteBytes] = movingaverage.NewTimeMedian(regionStatsAotSize, regionStatsRollingWindowsSize, interval)
-	timeMedians[StoreRegionWriteKeys] = movingaverage.NewTimeMedian(regionStatsAotSize, regionStatsRollingWindowsSize, interval)
+	timeMedians[StoreRegionWriteBytes] = movingaverage.NewTimeMedian(regionStatsAotSize, regionStatsRollingWindowsSize, RegionStatsObserveInterval)
+	timeMedians[StoreRegionWriteKeys] = movingaverage.NewTimeMedian(regionStatsAotSize, regionStatsRollingWindowsSize, RegionStatsObserveInterval)
 
 	return &RollingStoreStats{
 		timeMedians: timeMedians,
@@ -177,6 +194,14 @@ func (r *RollingStoreStats) Observe(stats *pdpb.StoreStats) {
 	r.movingAvgs[StoreDiskWriteRate].Add(collect(stats.GetWriteIoRates()))
 }
 
+// ObserveRegionStats records current statistics from region stats.
+func (r *RollingStoreStats) ObserveRegionStats(writeBytesRate, writeKeysRate float64) {
+	r.Lock()
+	defer r.Unlock()
+	r.timeMedians[StoreRegionWriteBytes].Add(writeBytesRate, RegionStatsObserveInterval)
+	r.timeMedians[StoreRegionWriteKeys].Add(writeKeysRate, RegionStatsObserveInterval)
+}
+
 // Set sets the statistics (for test).
 func (r *RollingStoreStats) Set(stats *pdpb.StoreStats) {
 	statInterval := stats.GetInterval()
@@ -196,6 +221,14 @@ func (r *RollingStoreStats) Set(stats *pdpb.StoreStats) {
 	r.movingAvgs[StoreCPUUsage].Set(collect(stats.GetCpuUsages()))
 	r.movingAvgs[StoreDiskReadRate].Set(collect(stats.GetReadIoRates()))
 	r.movingAvgs[StoreDiskWriteRate].Set(collect(stats.GetWriteIoRates()))
+}
+
+// SetRegionStats sets the statistics from region stats (for test).
+func (r *RollingStoreStats) SetRegionStats(writeBytesRate, writeKeysRate float64) {
+	r.Lock()
+	defer r.Unlock()
+	r.timeMedians[StoreRegionWriteBytes].Set(writeBytesRate)
+	r.timeMedians[StoreRegionWriteKeys].Set(writeKeysRate)
 }
 
 // GetLoad returns store's load.
