@@ -30,8 +30,10 @@ const (
 	// RegionsStatsObserveInterval is the interval for obtaining statistics from RegionTree
 	RegionsStatsObserveInterval = RegionHeartBeatReportInterval * time.Second
 	// The data from regionStats is used in TiFlash, so higher tolerance is required
-	regionsStatsAotSize            = 4
-	regionsStatsRollingWindowsSize = 10
+	// RegionsStatsAotSize is default size of average over time for data from regionStats
+	RegionsStatsAotSize = 4
+	// RegionsStatsRollingWindowsSize is default size of median filter for data from regionStats
+	RegionsStatsRollingWindowsSize = 10
 )
 
 // StoresStats is a cache hold hot regions.
@@ -156,8 +158,8 @@ func newRollingStoreStats() *RollingStoreStats {
 	movingAvgs[StoreDiskWriteRate] = movingaverage.NewMedianFilter(storeStatsRollingWindowsSize)
 
 	// from RegionHeartbeat
-	timeMedians[StoreRegionsWriteBytes] = movingaverage.NewTimeMedian(regionsStatsAotSize, regionsStatsRollingWindowsSize, RegionsStatsObserveInterval)
-	timeMedians[StoreRegionsWriteKeys] = movingaverage.NewTimeMedian(regionsStatsAotSize, regionsStatsRollingWindowsSize, RegionsStatsObserveInterval)
+	timeMedians[StoreRegionsWriteBytes] = movingaverage.NewTimeMedian(RegionsStatsAotSize, RegionsStatsRollingWindowsSize, RegionsStatsObserveInterval)
+	timeMedians[StoreRegionsWriteKeys] = movingaverage.NewTimeMedian(RegionsStatsAotSize, RegionsStatsRollingWindowsSize, RegionsStatsObserveInterval)
 
 	return &RollingStoreStats{
 		timeMedians: timeMedians,

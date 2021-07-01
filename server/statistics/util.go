@@ -24,9 +24,9 @@ const (
 	RegionHeartBeatReportInterval = 60
 	// DefaultAotSize is default size of average over time.
 	DefaultAotSize = 2
-	// DefaultWriteMfSize is default size of write median filter
+	// DefaultWriteMfSize is default size of write median filter.
 	DefaultWriteMfSize = 5
-	// DefaultReadMfSize is default size of read median filter
+	// DefaultReadMfSize is default size of read median filter.
 	DefaultReadMfSize = 3
 )
 
