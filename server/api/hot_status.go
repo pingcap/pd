@@ -82,8 +82,8 @@ func (h *hotStatusHandler) GetHotStores(w http.ResponseWriter, r *http.Request) 
 		id := store.GetID()
 		if loads, ok := storesLoads[id]; ok {
 			if core.IsTiFlashStore(store.GetMeta()) {
-				stats.BytesWriteStats[id] = loads[statistics.StoreRegionWriteBytes]
-				stats.KeysWriteStats[id] = loads[statistics.StoreRegionWriteKeys]
+				stats.BytesWriteStats[id] = loads[statistics.StoreRegionsWriteBytes]
+				stats.KeysWriteStats[id] = loads[statistics.StoreRegionsWriteKeys]
 			} else {
 				stats.BytesWriteStats[id] = loads[statistics.StoreWriteBytes]
 				stats.KeysWriteStats[id] = loads[statistics.StoreWriteKeys]

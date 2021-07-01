@@ -344,7 +344,7 @@ func (c *RaftCluster) runStatsBackgroundJobs() {
 			storeIDs, writeBytesRates, writeKeysRates := c.core.GetStoresWriteRate()
 			c.RUnlock()
 			c.Lock()
-			c.hotStat.ObserveRegionStats(storeIDs, writeBytesRates, writeKeysRates)
+			c.hotStat.ObserveRegionsStats(storeIDs, writeBytesRates, writeKeysRates)
 			c.Unlock()
 		}
 	}
