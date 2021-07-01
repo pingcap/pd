@@ -93,11 +93,11 @@ func (s *StoresStats) Set(storeID uint64, stats *pdpb.StoreStats) {
 	rollingStoreStat.Set(stats)
 }
 
-// SetRegionStats sets the store statistics from region stats (for test).
-func (s *StoresStats) SetRegionStats(storeIDs []uint64, writeBytesRates, writeKeysRates []float64) {
+// SetRegionsStats sets the store statistics from region stats (for test).
+func (s *StoresStats) SetRegionsStats(storeIDs []uint64, writeBytesRates, writeKeysRates []float64) {
 	for i, storeID := range storeIDs {
 		rollingStoreStat := s.GetOrCreateRollingStoreStats(storeID)
-		rollingStoreStat.SetRegionStats(writeBytesRates[i], writeKeysRates[i])
+		rollingStoreStat.SetRegionsStats(writeBytesRates[i], writeKeysRates[i])
 	}
 }
 
@@ -223,8 +223,8 @@ func (r *RollingStoreStats) Set(stats *pdpb.StoreStats) {
 	r.movingAvgs[StoreDiskWriteRate].Set(collect(stats.GetWriteIoRates()))
 }
 
-// SetRegionStats sets the statistics from region stats (for test).
-func (r *RollingStoreStats) SetRegionStats(writeBytesRate, writeKeysRate float64) {
+// SetRegionsStats sets the statistics from region stats (for test).
+func (r *RollingStoreStats) SetRegionsStats(writeBytesRate, writeKeysRate float64) {
 	r.Lock()
 	defer r.Unlock()
 	r.timeMedians[StoreRegionsWriteBytes].Set(writeBytesRate)
