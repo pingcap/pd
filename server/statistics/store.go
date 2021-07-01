@@ -27,11 +27,11 @@ import (
 const (
 	storeStatsRollingWindowsSize = 3
 
-	// RegionStatsObserveInterval is the interval for obtaining statistics from RegionTree
-	RegionStatsObserveInterval = RegionHeartBeatReportInterval * time.Second
+	// RegionsStatsObserveInterval is the interval for obtaining statistics from RegionTree
+	RegionsStatsObserveInterval = RegionHeartBeatReportInterval * time.Second
 	// The data from regionStats is used in TiFlash, so higher tolerance is required
-	regionStatsAotSize            = 4
-	regionStatsRollingWindowsSize = 10
+	regionsStatsAotSize            = 4
+	regionsStatsRollingWindowsSize = 10
 )
 
 // StoresStats is a cache hold hot regions.
@@ -156,8 +156,8 @@ func newRollingStoreStats() *RollingStoreStats {
 	movingAvgs[StoreDiskWriteRate] = movingaverage.NewMedianFilter(storeStatsRollingWindowsSize)
 
 	// from RegionHeartbeat
-	timeMedians[StoreRegionsWriteBytes] = movingaverage.NewTimeMedian(regionStatsAotSize, regionStatsRollingWindowsSize, RegionStatsObserveInterval)
-	timeMedians[StoreRegionsWriteKeys] = movingaverage.NewTimeMedian(regionStatsAotSize, regionStatsRollingWindowsSize, RegionStatsObserveInterval)
+	timeMedians[StoreRegionsWriteBytes] = movingaverage.NewTimeMedian(regionsStatsAotSize, regionsStatsRollingWindowsSize, RegionsStatsObserveInterval)
+	timeMedians[StoreRegionsWriteKeys] = movingaverage.NewTimeMedian(regionsStatsAotSize, regionsStatsRollingWindowsSize, RegionsStatsObserveInterval)
 
 	return &RollingStoreStats{
 		timeMedians: timeMedians,
@@ -198,8 +198,8 @@ func (r *RollingStoreStats) Observe(stats *pdpb.StoreStats) {
 func (r *RollingStoreStats) ObserveRegionsStats(writeBytesRate, writeKeysRate float64) {
 	r.Lock()
 	defer r.Unlock()
-	r.timeMedians[StoreRegionsWriteBytes].Add(writeBytesRate, RegionStatsObserveInterval)
-	r.timeMedians[StoreRegionsWriteKeys].Add(writeKeysRate, RegionStatsObserveInterval)
+	r.timeMedians[StoreRegionsWriteBytes].Add(writeBytesRate, RegionsStatsObserveInterval)
+	r.timeMedians[StoreRegionsWriteKeys].Add(writeKeysRate, RegionsStatsObserveInterval)
 }
 
 // Set sets the statistics (for test).

@@ -331,7 +331,7 @@ func (c *RaftCluster) runStatsBackgroundJobs() {
 	defer logutil.LogPanic()
 	defer c.wg.Done()
 
-	ticker := time.NewTicker(statistics.RegionStatsObserveInterval)
+	ticker := time.NewTicker(statistics.RegionsStatsObserveInterval)
 	defer ticker.Stop()
 
 	for {
