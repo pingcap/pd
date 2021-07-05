@@ -35,6 +35,7 @@ func initHotRegionScheduleConfig() *hotRegionSchedulerConfig {
 	return &hotRegionSchedulerConfig{
 		MinHotByteRate:         100,
 		MinHotKeyRate:          10,
+		MinHotQueryRate:        10,
 		MaxZombieRounds:        3,
 		ByteRateRankStepRatio:  0.05,
 		KeyRateRankStepRatio:   0.05,
@@ -54,6 +55,7 @@ type hotRegionSchedulerConfig struct {
 
 	MinHotByteRate  float64 `json:"min-hot-byte-rate"`
 	MinHotKeyRate   float64 `json:"min-hot-key-rate"`
+	MinHotQueryRate float64 `json:"min-hot-query-rate"`
 	MaxZombieRounds int     `json:"max-zombie-rounds"`
 	MaxPeerNum      int     `json:"max-peer-number"`
 
@@ -157,6 +159,12 @@ func (conf *hotRegionSchedulerConfig) GetMinHotByteRate() float64 {
 	conf.RLock()
 	defer conf.RUnlock()
 	return conf.MinHotByteRate
+}
+
+func (conf *hotRegionSchedulerConfig) GetMinHotQueryRate() float64 {
+	conf.RLock()
+	defer conf.RUnlock()
+	return conf.MinHotQueryRate
 }
 
 func (conf *hotRegionSchedulerConfig) ServeHTTP(w http.ResponseWriter, r *http.Request) {

@@ -245,6 +245,7 @@ var hideConfig = []string{
 	"enable-debug-metrics",
 	"store-limit-mode",
 	"scheduler-max-waiting-operator",
+	"hot-scheduler-version",
 }
 
 func showScheduleConfigCommandFunc(cmd *cobra.Command, args []string) {
