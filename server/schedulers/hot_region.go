@@ -401,15 +401,18 @@ func (h *hotScheduler) addPendingInfluence(op *operator.Operator, srcStore, dstS
 func (h *hotScheduler) balanceHotReadRegions(cluster opt.Cluster) []*operator.Operator {
 	// prefer to balance by leader
 	leaderSolver := newBalanceSolver(h, cluster, read, transferLeader)
-	ops := leaderSolver.solve()
-	if len(ops) > 0 {
-		return ops
+	leaderOps := leaderSolver.solve()
+	if len(leaderOps) > 0 && leaderSolver.best.progressiveRank <= -2 {
+		return leaderOps
 	}
 
 	peerSolver := newBalanceSolver(h, cluster, read, movePeer)
-	ops = peerSolver.solve()
-	if len(ops) > 0 {
-		return ops
+	peerOps := peerSolver.solve()
+	if len(leaderOps) > 0 && (len(peerOps) == 0 || leaderSolver.best.progressiveRank <= peerSolver.best.progressiveRank) {
+		return leaderOps
+	}
+	if len(peerOps) > 0 {
+		return peerOps
 	}
 
 	schedulerCounter.WithLabelValues(h.GetName(), "skip").Inc()
@@ -446,7 +449,8 @@ type balanceSolver struct {
 	rwTy         rwType
 	opTy         opType
 
-	cur *solution
+	cur  *solution
+	best *solution
 
 	maxSrc   *storeLoad
 	minDst   *storeLoad
@@ -457,6 +461,9 @@ type balanceSolver struct {
 	cpuPriority     int
 	anotherPriority int
 	isSelectedDim   func(int) bool
+
+	firstPriorityIsBetter  bool
+	secondPriorityIsBetter bool
 }
 
 type solution struct {
@@ -574,8 +581,8 @@ func (bs *balanceSolver) solve() []*operator.Operator {
 		return nil
 	}
 	bs.cur = &solution{}
+	bs.best = nil
 	var (
-		best  *solution
 		ops   []*operator.Operator
 		infls []Influence
 	)
@@ -592,12 +599,12 @@ func (bs *balanceSolver) solve() []*operator.Operator {
 			for dstStoreID := range bs.filterDstStores() {
 				bs.cur.dstStoreID = dstStoreID
 				bs.calcProgressiveRank()
-				if bs.cur.progressiveRank < 0 && bs.betterThan(best) {
+				if bs.cur.progressiveRank < 0 && bs.betterThan(bs.best) {
 					if newOps, newInfls := bs.buildOperators(); len(newOps) > 0 {
 						ops = newOps
 						infls = newInfls
 						clone := *bs.cur
-						best = &clone
+						bs.best = &clone
 					}
 				}
 			}
@@ -606,7 +613,7 @@ func (bs *balanceSolver) solve() []*operator.Operator {
 
 	for i := 0; i < len(ops); i++ {
 		// TODO: multiple operators need to be atomic.
-		if !bs.sche.addPendingInfluence(ops[i], best.srcStoreID, best.dstStoreID, infls[i]) {
+		if !bs.sche.addPendingInfluence(ops[i], bs.best.srcStoreID, bs.best.dstStoreID, infls[i]) {
 			return nil
 		}
 	}
@@ -638,7 +645,7 @@ func (bs *balanceSolver) filterSrcStores() map[uint64]*storeLoadDetail {
 			continue
 		}
 		minLoad := detail.LoadPred.min()
-		if slice.AllOf(minLoad.Loads, func(i int) bool {
+		if slice.AnyOf(minLoad.Loads, func(i int) bool {
 			if bs.isSelectedDim(i) {
 				return minLoad.Loads[i] > bs.sche.conf.GetSrcToleranceRatio()*detail.LoadPred.Expect.Loads[i]
 			}
@@ -827,7 +834,7 @@ func (bs *balanceSolver) pickDstStores(filters []filter.Filter, candidates []*co
 		if filter.Target(bs.cluster.GetOpts(), store, filters) {
 			detail := bs.stLoadDetail[store.GetID()]
 			maxLoads := detail.LoadPred.max().Loads
-			if slice.AllOf(maxLoads, func(i int) bool {
+			if slice.AnyOf(maxLoads, func(i int) bool {
 				if bs.isSelectedDim(i) {
 					return maxLoads[i]*dstToleranceRatio < detail.LoadPred.Expect.Loads[i]
 				}
@@ -882,13 +889,17 @@ func (bs *balanceSolver) calcProgressiveRank() {
 		switch {
 		case firstPriorityHot && firstPriorityDecRatio <= greatDecRatio && secondPriorityHot && secondPriorityDecRatio <= greatDecRatio:
 			// If belong to the case, two dim will be more balanced, the best choice.
-			rank = -3
-		case firstPriorityDecRatio <= minorDecRatio && secondPriorityHot && secondPriorityDecRatio <= greatDecRatio:
-			// If belong to the case, first priority dim will be not worsened, second priority dim will be more balanced.
 			rank = -2
-		case firstPriorityHot && firstPriorityDecRatio <= greatDecRatio:
+			bs.secondPriorityIsBetter = true
+			bs.firstPriorityIsBetter = true
+		case (!firstPriorityHot || firstPriorityDecRatio <= minorDecRatio) && secondPriorityHot && secondPriorityDecRatio <= greatDecRatio:
+			// If belong to the case, first priority dim will be not worsened, second priority dim will be more balanced.
+			rank = -1
+			bs.secondPriorityIsBetter = true
+		case (!secondPriorityHot || secondPriorityDecRatio <= minorDecRatio) && firstPriorityHot && firstPriorityDecRatio <= greatDecRatio:
 			// If belong to the case, first priority dim  will be more balanced, ignore the second priority dim.
 			rank = -1
+			bs.firstPriorityIsBetter = true
 		}
 	}
 	bs.cur.progressiveRank = rank
@@ -943,34 +954,53 @@ func (bs *balanceSolver) betterThan(old *solution) bool {
 				return false
 			}
 		} else {
-			fk, sk := getRegionStatKind(bs.rwTy, bs.firstPriority), getRegionStatKind(bs.rwTy, bs.secondPriority)
-			firstPriorityRkCmp := rankCmp(bs.cur.srcPeerStat.GetLoad(fk), old.srcPeerStat.GetLoad(fk), stepRank(0, 100))
-			secondPriorityRkCmp := rankCmp(bs.cur.srcPeerStat.GetLoad(sk), old.srcPeerStat.GetLoad(sk), stepRank(0, 10))
+			firstPriorityRkCmp := bs.getRkCmp(bs.firstPriority, old.srcPeerStat)
+			secondPriorityRkCmp := bs.getRkCmp(bs.secondPriority, old.srcPeerStat)
 
 			switch bs.cur.progressiveRank {
-			case -2: // greatDecRatio < firstPriorityDecRatio <= minorDecRatio && secondPriorityDecRatio <= greatDecRatio
-				if secondPriorityRkCmp != 0 {
-					return secondPriorityRkCmp > 0
+			case -1:
+				if bs.secondPriorityIsBetter {
+					// prefer region with larger rate, to converge faster
+					if secondPriorityRkCmp != 0 {
+						return secondPriorityRkCmp > 0
+					}
+					// prefer region with smaller rate to reduce oscillation
+					if firstPriorityRkCmp != 0 {
+						return firstPriorityRkCmp < 0
+					}
 				}
+				if bs.firstPriorityIsBetter {
+					if firstPriorityRkCmp != 0 {
+						return firstPriorityRkCmp > 0
+					}
+					if secondPriorityRkCmp != 0 {
+						return secondPriorityRkCmp < 0
+					}
+				}
+			case -2:
 				if firstPriorityRkCmp != 0 {
-					// prefer smaller first priority rate, to reduce oscillation
-					return firstPriorityRkCmp < 0
-				}
-			case -3: // firstPriorityDecRatio <= greatDecRatio && secondPriorityDecRatio <= greatDecRatio
-				if secondPriorityRkCmp != 0 {
-					return secondPriorityRkCmp > 0
-				}
-				fallthrough
-			case -1: // firstPriorityDecRatio <= greatDecRatio
-				if firstPriorityRkCmp != 0 {
-					// prefer region with larger first priority rate, to converge faster
 					return firstPriorityRkCmp > 0
 				}
+				if secondPriorityRkCmp != 0 {
+					return secondPriorityRkCmp > 0
+				}
+
 			}
 		}
 	}
 
 	return false
+}
+
+func (bs *balanceSolver) getRkCmp(dim int, old *statistics.HotPeerStat) int {
+	step := 10.0
+	if dim == statistics.ByteDim {
+		step = 100
+	}
+
+	kind := getRegionStatKind(bs.rwTy, dim)
+
+	return rankCmp(bs.cur.srcPeerStat.GetLoad(kind), old.GetLoad(kind), stepRank(0, step))
 }
 
 // smaller is better
