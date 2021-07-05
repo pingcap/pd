@@ -29,7 +29,6 @@ const (
 
 	// RegionsStatsObserveInterval is the interval for obtaining statistics from RegionTree
 	RegionsStatsObserveInterval = RegionHeartBeatReportInterval * time.Second
-
 	// RegionsStatsAotSize is default size of average over time for data from regionStats
 	RegionsStatsAotSize = 4
 	// RegionsStatsRollingWindowsSize is default size of median filter for data from regionStats

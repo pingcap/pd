@@ -94,7 +94,7 @@ func (s *hotTestSuite) TestHot(c *C) {
 		rc.GetStoresStats().Observe(ss.GetID(), newStats)
 	}
 
-	for i := statistics.RegionsStatsObserveInterval; i > 0; i-- {
+	for i := statistics.RegionsStatsRollingWindowsSize; i > 0; i-- {
 		rc.GetStoresStats().ObserveRegionsStats([]uint64{2}, []float64{float64(bytesWritten)}, []float64{float64(keysWritten)})
 	}
 
