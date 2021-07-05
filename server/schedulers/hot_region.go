@@ -251,7 +251,7 @@ func (h *hotScheduler) gcRegionPendings() {
 	for regionID, op := range h.regionPendings {
 		if op != nil && op.IsEnd() {
 			if time.Now().After(op.GetCreateTime().Add(h.conf.GetMaxZombieDuration())) {
-				log.Debug("gc pending influence in hot region scheduler", zap.Uint64("region-id", regionID), zap.Time("create", op.GetCreateTime()), zap.Time("now", time.Now()), zap.Duration("zombie", h.conf.GetMaxZombieDuration()))
+				log.Info("gc pending influence in hot region scheduler", zap.Uint64("region-id", regionID), zap.Time("create", op.GetCreateTime()), zap.Time("now", time.Now()), zap.Duration("zombie", h.conf.GetMaxZombieDuration()))
 				schedulerStatus.WithLabelValues(h.GetName(), "pending_op_infos").Dec()
 				delete(h.regionPendings, regionID)
 			}
@@ -891,11 +891,6 @@ func (bs *balanceSolver) calcProgressiveRank() {
 			rank = -1
 		}
 	}
-	log.Debug("calcProgressiveRank",
-		zap.Uint64("region-id", bs.cur.region.GetID()),
-		zap.Uint64("from-store-id", bs.cur.srcStoreID),
-		zap.Uint64("to-store-id", bs.cur.dstStoreID),
-		zap.Int64("rank", rank))
 	bs.cur.progressiveRank = rank
 }
 
@@ -1065,6 +1060,44 @@ func (bs *balanceSolver) isReadyToBuild() bool {
 	return true
 }
 
+func (bs *balanceSolver) generateAdditionalInfos() (additionalInfos map[string]string) {
+	additionalInfos = make(map[string]string, 6)
+	srcLd := bs.stLoadDetail[bs.cur.srcStoreID].LoadPred.min()
+	dstLd := bs.stLoadDetail[bs.cur.dstStoreID].LoadPred.max()
+	peer := bs.cur.srcPeerStat
+	for i := 0; i < statistics.DimLen; i++ {
+		name := statistics.DimToString(i)
+		additionalInfos["src"+name] = strconv.FormatFloat(srcLd.Loads[i], 'f', 2, 64)
+	}
+	for i := 0; i < statistics.DimLen; i++ {
+		name := statistics.DimToString(i)
+		additionalInfos["dst"+name] = strconv.FormatFloat(dstLd.Loads[i], 'f', 2, 64)
+	}
+	stats := statistics.ReadFlow.RegionStats()
+	for _, stat := range stats {
+		name := stat.String()
+		if l, ok := bs.sche.pendingSums[bs.cur.srcStoreID]; ok {
+			additionalInfos["srcPending"+name] = strconv.FormatFloat(l.Loads[stat], 'f', 2, 64)
+		} else {
+			additionalInfos["srcPending"+name] = strconv.FormatFloat(0, 'f', 2, 64)
+		}
+	}
+	for _, stat := range stats {
+		name := stat.String()
+		if l, ok := bs.sche.pendingSums[bs.cur.dstStoreID]; ok {
+			additionalInfos["dstPending"+name] = strconv.FormatFloat(l.Loads[stat], 'f', 2, 64)
+		} else {
+			additionalInfos["dstPending"+name] = strconv.FormatFloat(0, 'f', 2, 64)
+		}
+	}
+	for _, stat := range stats {
+		name := "peer" + stat.String()
+		additionalInfos[name] = strconv.FormatFloat(peer.GetLoad(stat), 'f', 2, 64)
+	}
+	additionalInfos["rank"] = strconv.FormatInt(bs.cur.progressiveRank, 10)
+	return additionalInfos
+}
+
 func (bs *balanceSolver) buildOperators() ([]*operator.Operator, []Influence) {
 	if !bs.isReadyToBuild() {
 		return nil, nil
@@ -1127,7 +1160,7 @@ func (bs *balanceSolver) buildOperators() ([]*operator.Operator, []Influence) {
 		schedulerCounter.WithLabelValues(bs.sche.GetName(), "create-operator-fail").Inc()
 		return nil, nil
 	}
-
+	op.AdditionalInfos = bs.generateAdditionalInfos()
 	op.SetPriorityLevel(core.HighPriority)
 	op.Counters = append(op.Counters, counters...)
 	op.Counters = append(op.Counters,
