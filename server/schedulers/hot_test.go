@@ -195,13 +195,21 @@ func (s *testHotWriteRegionSchedulerSuite) checkByteRateOnly(c *C, tc *mockclust
 	}
 
 	// hot region scheduler is restricted by `hot-region-schedule-limit`.
+<<<<<<< HEAD:server/schedulers/hot_test.go
 	opt.HotRegionScheduleLimit = 0
 	c.Assert(hb.Schedule(tc), HasLen, 0)
+=======
+	tc.SetHotRegionScheduleLimit(0)
+	c.Assert(hb.IsScheduleAllowed(tc), IsFalse)
+>>>>>>> c1f312845 (scheduler: simplify the limit judgment of hot-region-scheduler (#3834)):server/schedulers/hot_region_test.go
 	hb.(*hotScheduler).clearPendingInfluence()
 	opt.HotRegionScheduleLimit = mockoption.NewScheduleOptions().HotRegionScheduleLimit
 
+<<<<<<< HEAD:server/schedulers/hot_test.go
 	// hot region scheduler is restricted by schedule limit.
 	opt.LeaderScheduleLimit = 0
+=======
+>>>>>>> c1f312845 (scheduler: simplify the limit judgment of hot-region-scheduler (#3834)):server/schedulers/hot_region_test.go
 	for i := 0; i < 20; i++ {
 		op := hb.Schedule(tc)[0]
 		hb.(*hotScheduler).clearPendingInfluence()
@@ -214,7 +222,10 @@ func (s *testHotWriteRegionSchedulerSuite) checkByteRateOnly(c *C, tc *mockclust
 			testutil.CheckTransferPeerWithLeaderTransfer(c, op, operator.OpHotRegion, 1, 6)
 		}
 	}
+<<<<<<< HEAD:server/schedulers/hot_test.go
 	opt.LeaderScheduleLimit = mockoption.NewScheduleOptions().LeaderScheduleLimit
+=======
+>>>>>>> c1f312845 (scheduler: simplify the limit judgment of hot-region-scheduler (#3834)):server/schedulers/hot_region_test.go
 
 	// hot region scheduler is not affect by `balance-region-schedule-limit`.
 	opt.RegionScheduleLimit = 0
@@ -265,7 +276,11 @@ func (s *testHotWriteRegionSchedulerSuite) checkByteRateOnly(c *C, tc *mockclust
 	//   Region 1 and 2 are the same, cannot move peer to store 5 due to the label.
 	//   Region 3 can only move peer to store 5.
 	//   Region 5 can only move peer to store 6.
+<<<<<<< HEAD:server/schedulers/hot_test.go
 	opt.LeaderScheduleLimit = 0
+=======
+	tc.SetHotRegionScheduleLimit(0)
+>>>>>>> c1f312845 (scheduler: simplify the limit judgment of hot-region-scheduler (#3834)):server/schedulers/hot_region_test.go
 	for i := 0; i < 30; i++ {
 		op := hb.Schedule(tc)[0]
 		hb.(*hotScheduler).clearPendingInfluence()
@@ -447,7 +462,14 @@ func (s *testHotWriteRegionSchedulerSuite) TestWithPendingInfluence(c *C) {
 	for i := 0; i < 2; i++ {
 		// 0: byte rate
 		// 1: key rate
+<<<<<<< HEAD:server/schedulers/hot_test.go
 		tc := mockcluster.NewCluster(opt)
+=======
+		tc := mockcluster.NewCluster(ctx, opt)
+		tc.SetHotRegionCacheHitsThreshold(0)
+		tc.SetHotRegionScheduleLimit(0)
+		tc.DisableFeature(versioninfo.JointConsensus)
+>>>>>>> c1f312845 (scheduler: simplify the limit judgment of hot-region-scheduler (#3834)):server/schedulers/hot_region_test.go
 		tc.AddRegionStore(1, 20)
 		tc.AddRegionStore(2, 20)
 		tc.AddRegionStore(3, 20)
