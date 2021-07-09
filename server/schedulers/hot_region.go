@@ -159,6 +159,7 @@ func (h *hotScheduler) GetNextInterval(interval time.Duration) time.Duration {
 }
 
 func (h *hotScheduler) IsScheduleAllowed(cluster opt.Cluster) bool {
+<<<<<<< HEAD
 	return h.allowBalanceLeader(cluster) || h.allowBalanceRegion(cluster)
 }
 
@@ -176,6 +177,9 @@ func (h *hotScheduler) allowBalanceLeader(cluster opt.Cluster) bool {
 
 func (h *hotScheduler) allowBalanceRegion(cluster opt.Cluster) bool {
 	allowed := h.OpController.OperatorCount(operator.OpHotRegion) < cluster.GetHotRegionScheduleLimit()
+=======
+	allowed := h.OpController.OperatorCount(operator.OpHotRegion) < cluster.GetOpts().GetHotRegionScheduleLimit()
+>>>>>>> c1f312845 (scheduler: simplify the limit judgment of hot-region-scheduler (#3834))
 	if !allowed {
 		operator.OperatorLimitCounter.WithLabelValues(h.GetType(), operator.OpHotRegion.String()).Inc()
 	}
@@ -581,7 +585,7 @@ func (bs *balanceSolver) isValid() bool {
 }
 
 func (bs *balanceSolver) solve() []*operator.Operator {
-	if !bs.isValid() || !bs.allowBalance() {
+	if !bs.isValid() {
 		return nil
 	}
 	bs.cur = &solution{}
@@ -624,6 +628,7 @@ func (bs *balanceSolver) solve() []*operator.Operator {
 	return ops
 }
 
+<<<<<<< HEAD
 func (bs *balanceSolver) allowBalance() bool {
 	switch bs.opTy {
 	case movePeer:
@@ -635,6 +640,10 @@ func (bs *balanceSolver) allowBalance() bool {
 	}
 }
 
+=======
+// filterSrcStores compare the min rate and the ratio * expectation rate, if both key and byte rate is greater than
+// its expectation * ratio, the store would be selected as hot source store
+>>>>>>> c1f312845 (scheduler: simplify the limit judgment of hot-region-scheduler (#3834))
 func (bs *balanceSolver) filterSrcStores() map[uint64]*storeLoadDetail {
 	ret := make(map[uint64]*storeLoadDetail)
 	for id, detail := range bs.stLoadDetail {
@@ -1041,6 +1050,7 @@ func (bs *balanceSolver) buildOperators() ([]*operator.Operator, []Influence) {
 	switch bs.opTy {
 	case movePeer:
 		srcPeer := bs.cur.region.GetStorePeer(bs.cur.srcStoreID) // checked in getRegionAndSrcPeer
+<<<<<<< HEAD
 		dstPeer := &metapb.Peer{StoreId: bs.cur.dstStoreID, IsLearner: srcPeer.IsLearner}
 		op, err = operator.CreateMovePeerOperator(
 			"move-hot-"+bs.rwTy.String()+"-region",
@@ -1050,6 +1060,29 @@ func (bs *balanceSolver) buildOperators() ([]*operator.Operator, []Influence) {
 			bs.cur.srcStoreID,
 			dstPeer)
 
+=======
+		dstPeer := &metapb.Peer{StoreId: bs.cur.dstStoreID, Role: srcPeer.Role}
+		typ := "move-peer"
+		if bs.rwTy == read && bs.cur.region.GetLeader().StoreId == bs.cur.srcStoreID { // move read leader
+			op, err = operator.CreateMoveLeaderOperator(
+				"move-hot-read-leader",
+				bs.cluster,
+				bs.cur.region,
+				operator.OpHotRegion,
+				bs.cur.srcStoreID,
+				dstPeer)
+			typ = "move-leader"
+		} else {
+			desc := "move-hot-" + bs.rwTy.String() + "-peer"
+			op, err = operator.CreateMovePeerOperator(
+				desc,
+				bs.cluster,
+				bs.cur.region,
+				operator.OpHotRegion,
+				bs.cur.srcStoreID,
+				dstPeer)
+		}
+>>>>>>> c1f312845 (scheduler: simplify the limit judgment of hot-region-scheduler (#3834))
 		counters = append(counters,
 			balanceHotRegionCounter.WithLabelValues("move-peer", strconv.FormatUint(bs.cur.srcStoreID, 10)+"-out", bs.rwTy.String()),
 			balanceHotRegionCounter.WithLabelValues("move-peer", strconv.FormatUint(dstPeer.GetStoreId(), 10)+"-in", bs.rwTy.String()))
