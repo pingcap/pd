@@ -41,6 +41,7 @@ func NewStoreCommand() *cobra.Command {
 	s.AddCommand(NewDeleteStoreCommand())
 	s.AddCommand(NewLabelStoreCommand())
 	s.AddCommand(NewSetStoreWeightCommand())
+	s.AddCommand(NewSetStoreHotWeightCommand())
 	s.AddCommand(NewStoreLimitCommand())
 	s.AddCommand(NewRemoveTombStoneCommand())
 	s.AddCommand(NewStoreLimitSceneCommand())
@@ -88,6 +89,15 @@ func NewSetStoreWeightCommand() *cobra.Command {
 		Use:   "weight <store_id> <leader_weight> <region_weight>",
 		Short: "set a store's leader and region balance weight",
 		Run:   setStoreWeightCommandFunc,
+	}
+}
+
+// NewSetStoreHotWeightCommand returns a hot weight sub command of storeCMD
+func NewSetStoreHotWeightCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "hot-weight <store_id> <rwType> <dimType> <weight>",
+		Short: "set a store's hot read and write scheduling weight",
+		Run:   setStoreHotWeightCommandFunc,
 	}
 }
 
@@ -395,6 +405,34 @@ func setStoreWeightCommandFunc(cmd *cobra.Command, args []string) {
 	postJSON(cmd, prefix, map[string]interface{}{
 		"leader": leader,
 		"region": region,
+	})
+}
+
+func setStoreHotWeightCommandFunc(cmd *cobra.Command, args []string) {
+	if len(args) != 4 {
+		cmd.Usage()
+		return
+	}
+	rwType := args[1]
+	if rwType != "read" && rwType != "write" {
+		cmd.Println("rwType should be read or write")
+		return
+	}
+	dimType := args[2]
+	if dimType != "key" && dimType != "byte" {
+		cmd.Println("dim should be key or bytes")
+	}
+
+	weight, err := strconv.ParseFloat(args[3], 64)
+	if err != nil || weight <= 0 {
+		cmd.Println("weight should be a number that > 0.")
+		return
+	}
+	prefix := fmt.Sprintf(path.Join(storePrefix, "hot-weight"), args[0])
+	postJSON(cmd, prefix, map[string]interface{}{
+		"type":             rwType,
+		"dim":              dimType,
+		"weight":           weight,
 	})
 }
 

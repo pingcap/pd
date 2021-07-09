@@ -166,6 +166,20 @@ func SetRegionWeight(regionWeight float64) StoreCreateOption {
 	}
 }
 
+// SetStoreReadDimWeights sets the Store hot read weight
+func SetStoreReadDimWeights(readDimWeights [DimLen]float64) StoreCreateOption {
+	return func(store *StoreInfo) {
+		store.readDimWeights = readDimWeights
+	}
+}
+
+// SetStoreWriteDimWeights sets the Store hot write weight
+func SetStoreWriteDimWeights(writeDimWeights [DimLen]float64) StoreCreateOption {
+	return func(store *StoreInfo) {
+		store.writeDimWeights = writeDimWeights
+	}
+}
+
 // SetLastHeartbeatTS sets the time of last heartbeat for the store.
 func SetLastHeartbeatTS(lastHeartbeatTS time.Time) StoreCreateOption {
 	return func(store *StoreInfo) {

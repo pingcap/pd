@@ -1183,6 +1183,40 @@ func (c *RaftCluster) SetStoreWeight(storeID uint64, leaderWeight, regionWeight 
 	return c.putStoreLocked(newStore)
 }
 
+// SetStoreDimWeight set store dim weight
+func (c *RaftCluster) SetStoreDimWeight(storeID uint64, rw string, dim int, weight float64) error {
+	c.Lock()
+	defer c.Unlock()
+	store := c.GetStore(storeID)
+	if store == nil {
+		return errs.ErrStoreNotFound.FastGenByArgs(storeID)
+	}
+	if rw == "read" {
+		x := store.GetReadDimWeights()
+		x[dim] = weight
+		return c.setStoreHotWeight(storeID, x, store.GetWriteDimWeights())
+	}
+	x := store.GetWriteDimWeights()
+	x[dim] = weight
+	return c.setStoreHotWeight(storeID, store.GetReadDimWeights(), x)
+}
+
+// SetStoreHotWeight sets store hot weight for read and write
+func (c *RaftCluster) setStoreHotWeight(storeID uint64, hotReadWeight, hotWriteWeight [core.DimLen]float64) error {
+	store := c.GetStore(storeID)
+	if store == nil {
+		return errs.ErrStoreNotFound.FastGenByArgs(storeID)
+	}
+	if err := c.storage.SaveStoreHotWeight(storeID, hotReadWeight, hotWriteWeight); err != nil {
+		return err
+	}
+	newStore := store.Clone(
+		core.SetStoreReadDimWeights(hotReadWeight),
+		core.SetStoreWriteDimWeights(hotWriteWeight),
+	)
+	return c.putStoreLocked(newStore)
+}
+
 func (c *RaftCluster) putStoreLocked(store *core.StoreInfo) error {
 	if c.storage != nil {
 		if err := c.storage.SaveStore(store.GetMeta()); err != nil {

@@ -27,6 +27,13 @@ import (
 )
 
 const (
+	ByteDim int = iota
+	KeyDim
+	QueryDim
+	DimLen
+)
+
+const (
 	// Interval to save store meta (including heartbeat ts) to etcd.
 	storePersistInterval   = 5 * time.Minute
 	mb                     = 1 << 20 // megabyte
@@ -48,6 +55,8 @@ type StoreInfo struct {
 	lastPersistTime     time.Time
 	leaderWeight        float64
 	regionWeight        float64
+	readDimWeights      [DimLen]float64
+	writeDimWeights     [DimLen]float64
 	available           map[storelimit.Type]func() bool
 }
 
@@ -58,6 +67,12 @@ func NewStoreInfo(store *metapb.Store, opts ...StoreCreateOption) *StoreInfo {
 		storeStats:   newStoreStats(),
 		leaderWeight: 1.0,
 		regionWeight: 1.0,
+		readDimWeights: [DimLen]float64{
+			1.0, 1.0, 1.0,
+		},
+		writeDimWeights: [DimLen]float64{
+			1.0, 1.0, 1.0,
+		},
 	}
 	for _, opt := range opts {
 		opt(storeInfo)
@@ -80,6 +95,8 @@ func (s *StoreInfo) Clone(opts ...StoreCreateOption) *StoreInfo {
 		lastPersistTime:     s.lastPersistTime,
 		leaderWeight:        s.leaderWeight,
 		regionWeight:        s.regionWeight,
+		readDimWeights:      s.readDimWeights,
+		writeDimWeights:     s.writeDimWeights,
 		available:           s.available,
 	}
 
@@ -103,6 +120,8 @@ func (s *StoreInfo) ShallowClone(opts ...StoreCreateOption) *StoreInfo {
 		lastPersistTime:     s.lastPersistTime,
 		leaderWeight:        s.leaderWeight,
 		regionWeight:        s.regionWeight,
+		readDimWeights:      s.readDimWeights,
+		writeDimWeights:     s.writeDimWeights,
 		available:           s.available,
 	}
 
@@ -214,6 +233,16 @@ func (s *StoreInfo) GetLeaderWeight() float64 {
 // GetRegionWeight returns the Region weight of the store.
 func (s *StoreInfo) GetRegionWeight() float64 {
 	return s.regionWeight
+}
+
+// GetReadDimWeights returns the hot read weight of the store.
+func (s *StoreInfo) GetReadDimWeights() [DimLen]float64 {
+	return s.readDimWeights
+}
+
+// GetWriteDimWeights returns the hot write weight of the store
+func (s *StoreInfo) GetWriteDimWeights() [DimLen]float64 {
+	return s.writeDimWeights
 }
 
 // GetLastHeartbeatTS returns the last heartbeat timestamp of the store.

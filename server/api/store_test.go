@@ -491,3 +491,30 @@ func (s *testStoreSuite) TestStoreLimitTTL(c *C) {
 	c.Assert(s.svr.GetPersistOptions().GetStoreLimit(uint64(2)).AddPeer, Not(Equals), float64(997))
 	c.Assert(s.svr.GetPersistOptions().GetStoreLimit(uint64(2)).RemovePeer, Not(Equals), float64(996))
 }
+
+func (s *testStoreSuite) TestStoreHotWeight(c *C) {
+	url := fmt.Sprintf("%s/stores", s.urlPrefix)
+	storesInfo := new(StoresInfo)
+	err := readJSON(testDialClient, url, storesInfo)
+	c.Assert(err, IsNil)
+	for _, storeInfo := range storesInfo.Stores {
+		// assert dim weight default value
+		c.Assert(storeInfo.Status.ReadDimWeight.ByteWeight, Equals, 1.0)
+		c.Assert(storeInfo.Status.ReadDimWeight.KeyWeight, Equals, 1.0)
+		c.Assert(storeInfo.Status.WriteDimWeight.ByteWeight, Equals, 1.0)
+		c.Assert(storeInfo.Status.WriteDimWeight.KeyWeight, Equals, 1.0)
+	}
+	weight := map[string]interface{}{
+		"type":   "read",
+		"dim":    "byte",
+		"weight": 2.0,
+	}
+	w, _ := json.Marshal(weight)
+	err = postJSON(testDialClient, s.urlPrefix+"/store/1/hot-weight", w)
+	c.Assert(err, IsNil)
+	url = fmt.Sprintf("%s/store/1", s.urlPrefix)
+	storeInfo := new(StoreInfo)
+	err = readJSON(testDialClient, url, storeInfo)
+	c.Assert(err, IsNil)
+	c.Assert(storeInfo.Status.ReadDimWeight.ByteWeight, Equals, 2.0)
+}
