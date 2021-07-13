@@ -15,6 +15,8 @@ package statistics
 
 import (
 	"context"
+	"time"
+
 	"github.com/tikv/pd/server/core"
 )
 
@@ -96,14 +98,14 @@ func (w *HotCache) Update(item *HotPeerStat) {
 func (w *HotCache) RegionStats(kind FlowKind, minHotDegree int) map[uint64][]*HotPeerStat {
 	switch kind {
 	case WriteFlow:
-		task := newCollectRegionStatsTask(minHotDegree)
+		task := newCollectRegionStatsTask(minHotDegree, WriteFlow.String())
 		succ := w.CheckWriteAsync(task)
 		if !succ {
 			return nil
 		}
 		return task.waitRet(w.ctx, w.quit)
 	case ReadFlow:
-		task := newCollectRegionStatsTask(minHotDegree)
+		task := newCollectRegionStatsTask(minHotDegree, ReadFlow.String())
 		succ := w.CheckReadAsync(task)
 		if !succ {
 			return nil
@@ -123,8 +125,8 @@ func (w *HotCache) HotRegionsFromStore(storeID uint64, kind FlowKind, minHotDegr
 
 // IsRegionHot checks if the region is hot.
 func (w *HotCache) IsRegionHot(region *core.RegionInfo, minHotDegree int) bool {
-	writeIsRegionHotTask := newIsRegionHotTask(region, minHotDegree)
-	readIsRegionHotTask := newIsRegionHotTask(region, minHotDegree)
+	writeIsRegionHotTask := newIsRegionHotTask(region, minHotDegree, WriteFlow.String())
+	readIsRegionHotTask := newIsRegionHotTask(region, minHotDegree, ReadFlow.String())
 	succ1 := w.CheckWriteAsync(writeIsRegionHotTask)
 	succ2 := w.CheckReadAsync(readIsRegionHotTask)
 	if succ1 && succ2 {
@@ -195,7 +197,9 @@ func (w *HotCache) updateItems(queue <-chan FlowItemTask, runTask func(task Flow
 func (w *HotCache) runReadTask(task FlowItemTask) {
 	if task != nil {
 		// TODO: do we need a run-task timeout to protect the queue won't be stucked by a task?
+		start := time.Now()
 		task.runTask(w.readFlow)
+		hotCacheFlowTaskRunDurationHist.WithLabelValues(task.taskType(), ReadFlow.String()).Observe(time.Since(start).Seconds())
 		hotCacheFlowQueueStatusGauge.WithLabelValues(ReadFlow.String()).Set(float64(len(w.readFlowQueue)))
 	}
 }
@@ -203,7 +207,9 @@ func (w *HotCache) runReadTask(task FlowItemTask) {
 func (w *HotCache) runWriteTask(task FlowItemTask) {
 	if task != nil {
 		// TODO: do we need a run-task timeout to protect the queue won't be stucked by a task?
+		start := time.Now()
 		task.runTask(w.writeFlow)
+		hotCacheFlowTaskRunDurationHist.WithLabelValues(task.taskType(), WriteFlow.String()).Observe(time.Since(start).Seconds())
 		hotCacheFlowQueueStatusGauge.WithLabelValues(WriteFlow.String()).Set(float64(len(w.writeFlowQueue)))
 	}
 }

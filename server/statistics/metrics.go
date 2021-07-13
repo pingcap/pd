@@ -169,6 +169,24 @@ var (
 			Name:      "flow_queue_status",
 			Help:      "Status of the hotspot flow queue.",
 		}, []string{"type"})
+
+	hotCacheFlowTaskRunDurationHist = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: "pd",
+			Subsystem: "hotcache",
+			Name:      "handle_flow_task_run_duration",
+			Help:      "Bucketed histogram of processing time (s) of running flow task.",
+			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 13),
+		}, []string{"type", "rw"})
+
+	hotCacheFlowTaskWaitDurationHist = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: "pd",
+			Subsystem: "hotcache",
+			Name:      "handle_flow_task_wait_duration",
+			Help:      "Bucketed histogram of processing time (s) of flow task waiting result",
+			Buckets:   prometheus.ExponentialBuckets(0.0005, 2, 13),
+		}, []string{"type", "rw"})
 )
 
 var (
@@ -195,4 +213,6 @@ func init() {
 	prometheus.MustRegister(storeHeartbeatIntervalHist)
 	prometheus.MustRegister(regionAbnormalPeerDuration)
 	prometheus.MustRegister(hotCacheFlowQueueStatusGauge)
+	prometheus.MustRegister(hotCacheFlowTaskRunDurationHist)
+	prometheus.MustRegister(hotCacheFlowTaskWaitDurationHist)
 }
