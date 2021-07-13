@@ -200,7 +200,8 @@ func createRouter(prefix string, svr *server.Server) *mux.Router {
 	clusterRouter.HandleFunc("/admin/replication_mode/wait-async", adminHandler.UpdateWaitAsyncTime).Methods("POST")
 
 	logHandler := newLogHandler(svr, rd)
-	apiRouter.HandleFunc("/admin/log", logHandler.Handle).Methods("POST")
+	apiRouter.HandleFunc("/admin/log", logHandler.GetLog).Methods("GET")
+	apiRouter.HandleFunc("/admin/log", logHandler.SetLogLevel).Methods("POST")
 
 	replicationModeHandler := newReplicationModeHandler(svr, rd)
 	clusterRouter.HandleFunc("/replication_mode/status", replicationModeHandler.GetStatus)
