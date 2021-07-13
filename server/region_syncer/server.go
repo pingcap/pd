@@ -69,10 +69,10 @@ type Server interface {
 type RegionSyncer struct {
 	mu struct {
 		sync.RWMutex
-		streams            map[string]ServerStream
-		regionSyncerCtx    context.Context
-		regionSyncerCancel context.CancelFunc
-		closed             chan struct{}
+		streams      map[string]ServerStream
+		clientCtx    context.Context
+		clientCancel context.CancelFunc
+		serverCtx    context.Context
 	}
 	server    Server
 	wg        sync.WaitGroup
@@ -94,20 +94,23 @@ func NewRegionSyncer(s Server) *RegionSyncer {
 		tlsConfig: s.GetTLSConfig(),
 	}
 	syncer.mu.streams = make(map[string]ServerStream)
-	syncer.mu.closed = make(chan struct{})
 	return syncer
 }
 
 // RunServer runs the server of the region syncer.
 // regionNotifier is used to get the changed regions.
-func (s *RegionSyncer) RunServer(regionNotifier <-chan *core.RegionInfo, quit chan struct{}) {
+func (s *RegionSyncer) RunServer(ctx context.Context, regionNotifier <-chan *core.RegionInfo) {
+	s.mu.Lock()
+	s.mu.serverCtx = ctx
+	s.mu.Unlock()
+
 	var requests []*metapb.Region
 	var stats []*pdpb.RegionStat
 	var leaders []*metapb.Peer
 	ticker := time.NewTicker(syncerKeepAliveInterval)
 	for {
 		select {
-		case <-quit:
+		case <-ctx.Done():
 			log.Info("region syncer has been stopped")
 			return
 		case first := <-regionNotifier:
@@ -146,7 +149,17 @@ func (s *RegionSyncer) RunServer(regionNotifier <-chan *core.RegionInfo, quit ch
 // Sync firstly tries to sync the history records to client.
 // then to sync the latest records.
 func (s *RegionSyncer) Sync(stream pdpb.PD_SyncRegionsServer) error {
+	s.mu.Lock()
+	ctx := s.mu.serverCtx
+	s.mu.Unlock()
+
 	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		default:
+		}
+
 		request, err := stream.Recv()
 		if err == io.EOF {
 			return nil
@@ -158,11 +171,12 @@ func (s *RegionSyncer) Sync(stream pdpb.PD_SyncRegionsServer) error {
 		if clusterID != s.server.ClusterID() {
 			return status.Errorf(codes.FailedPrecondition, "mismatch cluster id, need %d but got %d", s.server.ClusterID(), clusterID)
 		}
+
 		log.Info("establish sync region stream",
 			zap.String("requested-server", request.GetMember().GetName()),
 			zap.String("url", request.GetMember().GetClientUrls()[0]))
 
-		err = s.syncHistoryRegion(request, stream)
+		err = s.syncHistoryRegion(ctx, request, stream)
 		if err != nil {
 			return err
 		}
@@ -170,7 +184,7 @@ func (s *RegionSyncer) Sync(stream pdpb.PD_SyncRegionsServer) error {
 	}
 }
 
-func (s *RegionSyncer) syncHistoryRegion(request *pdpb.SyncRegionRequest, stream pdpb.PD_SyncRegionsServer) error {
+func (s *RegionSyncer) syncHistoryRegion(ctx context.Context, request *pdpb.SyncRegionRequest, stream pdpb.PD_SyncRegionsServer) error {
 	startIndex := request.GetStartIndex()
 	name := request.GetMember().GetName()
 	records := s.history.RecordsFrom(startIndex)
@@ -189,6 +203,13 @@ func (s *RegionSyncer) syncHistoryRegion(request *pdpb.SyncRegionRequest, stream
 			stats := make([]*pdpb.RegionStat, 0, maxSyncRegionBatchSize)
 			leaders := make([]*metapb.Peer, 0, maxSyncRegionBatchSize)
 			for syncedIndex, r := range regions {
+				select {
+				case <-ctx.Done():
+					log.Info("Discontinue sending sync region response")
+					return nil
+				default:
+				}
+
 				metas = append(metas, r.GetMeta())
 				stats = append(stats, r.GetStat())
 				leader := &metapb.Peer{}
