@@ -24,16 +24,25 @@ type OpKind uint32
 
 // Flags for operators.
 const (
-	OpLeader    OpKind = 1 << iota // Include leader transfer.
-	OpRegion                       // Include peer movement.
-	OpSplit                        // Include region split.
-	OpAdmin                        // Initiated by admin.
-	OpHotRegion                    // Initiated by hot region scheduler.
-	OpAdjacent                     // Initiated by adjacent region scheduler.
-	OpReplica                      // Initiated by replica checkers.
-	OpBalance                      // Initiated by balancers.
-	OpMerge                        // Initiated by merge checkers or merge schedulers.
-	OpRange                        // Initiated by range scheduler.
+	// Initiated by merge checker or merge scheduler. Note that it may not include region merge.
+	// the order describe the operator's producer and is very helpful to decouple scheduler or checker limit
+	OpMerge OpKind = 1 << iota
+	// Initiated by range scheduler.
+	OpRange
+	// Initiated by replica checker.
+	OpReplica
+	// Include region split. Initiated by rule checker if `kind & OpAdmin == 0`.
+	OpSplit
+	// Initiated by hot region scheduler.
+	OpHotRegion
+	// Include peer addition or removal. This means that this operator may take a long time.
+	OpRegion
+	// Include leader transfer.
+	OpLeader
+	OpBalance
+	OpAdjacent
+	// Initiated by admin.
+	OpAdmin
 	opMax
 )
 
