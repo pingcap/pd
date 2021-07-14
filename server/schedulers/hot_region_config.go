@@ -30,6 +30,19 @@ import (
 	"github.com/unrolled/render"
 )
 
+const (
+	// NoneDimPriority indicates hot-region-scheduler doesn't have dim priority
+	NoneDimPriority = "none"
+	// ReadKeyDimPriority indicates hot-region-scheduler prefer read key dim
+	ReadKeyDimPriority = "read_key"
+	// ReadByteDimPriority indicates hot-region-scheduler prefer read byte dim
+	ReadByteDimPriority = "read_byte"
+	// WriteKeyDimPriority indicates hot-region-scheduler prefer write key dim
+	WriteKeyDimPriority = "write_key"
+	// WriteByteDimPriority indicates hot-region-scheduler prefer write byte dim
+	WriteByteDimPriority = "write_byte"
+)
+
 // params about hot region.
 func initHotRegionScheduleConfig() *hotRegionSchedulerConfig {
 	return &hotRegionSchedulerConfig{
@@ -45,6 +58,7 @@ func initHotRegionScheduleConfig() *hotRegionSchedulerConfig {
 		MaxPeerNum:             1000,
 		SrcToleranceRatio:      1.05, // Tolerate 5% difference
 		DstToleranceRatio:      1.05, // Tolerate 5% difference
+		HotDimPriority:         NoneDimPriority,
 	}
 }
 
@@ -67,6 +81,7 @@ type hotRegionSchedulerConfig struct {
 	MinorDecRatio          float64 `json:"minor-dec-ratio"`
 	SrcToleranceRatio      float64 `json:"src-tolerance-ratio"`
 	DstToleranceRatio      float64 `json:"dst-tolerance-ratio"`
+	HotDimPriority         string  `json:"hot-dim-priority"`
 }
 
 func (conf *hotRegionSchedulerConfig) EncodeConfig() ([]byte, error) {
